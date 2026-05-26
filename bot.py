@@ -1,9 +1,26 @@
 import sys
 import json
+import ctypes
+
+# Try to allocate a separate console window for logging in Windows
+console_out = sys.stderr  # Default fallback
+try:
+    kernel32 = ctypes.windll.kernel32
+    if kernel32.AllocConsole():
+        kernel32.SetConsoleTitleW("Slay the Spire Bot Logs")
+        console_out = open("CONOUT$", "w", encoding="utf-8")
+        # Redirect stderr so that any unhandled Python exceptions display in this console window
+        sys.stderr = console_out
+        print("Slay the Spire Bot Console Logs", file=console_out, flush=True)
+        print("===============================", file=console_out, flush=True)
+    else:
+        print("[BOT LOG]: Console already attached.", file=sys.stderr, flush=True)
+except Exception as e:
+    print(f"[BOT LOG]: Failed to allocate console: {e}", file=sys.stderr, flush=True)
 
 def log(message):
-    """Since stdout is used to talk to the game, we must print logs to stderr."""
-    print(f"[BOT LOG]: {message}", file=sys.stderr, flush=True)
+    """Since stdout is used to talk to the game, we print logs to the allocated console window."""
+    print(f"[BOT LOG]: {message}", file=console_out, flush=True)
 
 def send_command(command):
     """Sends a command to Slay the Spire and flushes the buffer."""
