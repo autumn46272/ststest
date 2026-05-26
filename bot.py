@@ -1,26 +1,41 @@
 import sys
 import json
-import ctypes
+import os
+import subprocess
+import datetime
 
-# Try to allocate a separate console window for logging in Windows
-console_out = sys.stderr  # Default fallback
-try:
-    kernel32 = ctypes.windll.kernel32
-    if kernel32.AllocConsole():
-        kernel32.SetConsoleTitleW("Slay the Spire Bot Logs")
-        console_out = open("CONOUT$", "w", encoding="utf-8")
-        # Redirect stderr so that any unhandled Python exceptions display in this console window
-        sys.stderr = console_out
-        print("Slay the Spire Bot Console Logs", file=console_out, flush=True)
-        print("===============================", file=console_out, flush=True)
-    else:
-        print("[BOT LOG]: Console already attached.", file=sys.stderr, flush=True)
-except Exception as e:
-    print(f"[BOT LOG]: Failed to allocate console: {e}", file=sys.stderr, flush=True)
+# --- Logging Setup ---
+# We write all logs to a file next to this script, then open a cmd.exe window
+# that live-tails it. This works reliably no matter how the game launches us.
+
+LOG_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bot_log.txt")
+
+# Open the log file (overwrite on each new run so it stays readable)
+_log_file = open(LOG_FILE, "w", encoding="utf-8", buffering=1)
 
 def log(message):
-    """Since stdout is used to talk to the game, we print logs to the allocated console window."""
-    print(f"[BOT LOG]: {message}", file=console_out, flush=True)
+    """Since stdout is used to talk to the game, we write logs to a file instead."""
+    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+    line = f"[{timestamp}] {message}"
+    print(line, file=_log_file, flush=True)
+
+# Redirect Python's own stderr (tracebacks etc.) into the log file too
+sys.stderr = _log_file
+
+# Open a separate cmd.exe window that live-tails the log file using PowerShell.
+# 'start' always creates a new window; Get-Content -Wait is the Windows equivalent of tail -f.
+try:
+    subprocess.Popen(
+        [
+            "cmd.exe", "/c", "start",
+            "Slay the Spire Bot Logs",          # Window title
+            "powershell", "-NoExit", "-Command",
+            f"Get-Content -Wait '{LOG_FILE}'"
+        ],
+        close_fds=True
+    )
+except Exception as e:
+    log(f"Could not open log window: {e}")
 
 def send_command(command):
     """Sends a command to Slay the Spire and flushes the buffer."""
